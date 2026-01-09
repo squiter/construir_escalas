@@ -105,6 +105,18 @@ jobs:
       - name: Build binary with Burrito
         run: mix release
 
+      - name: Rename binary to construir_escala.exe
+        run: |
+          $source = "burrito_out/construir_escala_windows.exe"
+          $dest = "burrito_out/construir_escala.exe"
+          if (Test-Path $source) {
+            Copy-Item -Path $source -Destination $dest -Force
+            Write-Host "Renamed $source to $dest"
+          } else {
+            Write-Host "Warning: $source not found, listing burrito_out contents:"
+            Get-ChildItem -Path "burrito_out" -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "  $($_.Name)" }
+          }
+
       - name: Find built binary
         run: |
           Write-Host "Searching for built binary..."
