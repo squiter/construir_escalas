@@ -26,13 +26,30 @@ jobs:
 
       - name: Install Zig
         run: |
-          # Burrito 1.4.0 requires exactly Zig 0.14.1
-          $zigVersion = "0.14.1"
-          $zigUrl = "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip"
+          # Burrito 1.3.0 requires exactly Zig 0.14.0
+          # Try 0.14.0 first, then fallback to older versions
+          $zigVersions = @("0.14.0", "0.13.0", "0.12.0")
           $zigZip = "zig.zip"
+          $success = $false
           
-          Write-Host "Downloading Zig $zigVersion from $zigUrl"
-          Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing
+          foreach ($zigVersion in $zigVersions) {
+            $zigUrl = "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip"
+            Write-Host "Trying Zig $zigVersion from $zigUrl"
+            try {
+              Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing -ErrorAction Stop
+              Write-Host "Successfully downloaded Zig $zigVersion"
+              $success = $true
+              break
+            } catch {
+              Write-Host "Failed to download $zigVersion : $($_.Exception.Message)"
+              if (Test-Path $zigZip) { Remove-Item $zigZip }
+            }
+          }
+          
+          if (-not $success) {
+            Write-Error "Failed to download any Zig version"
+            exit 1
+          }
           
           Write-Host "Extracting Zig..."
           Expand-Archive -Path $zigZip -DestinationPath . -Force

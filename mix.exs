@@ -23,7 +23,7 @@ defmodule ConstruirEscala.MixProject do
 
   defp deps do
     [
-      {:burrito, "1.4.0", runtime: false}
+      {:burrito, "1.3.0", runtime: false}
     ]
   end
 
