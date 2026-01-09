@@ -4,6 +4,11 @@ defmodule ConstruirEscala.CLI do
   """
 
   def main(args) do
+    # Filter out empty strings and maintenance commands
+    args = args
+           |> Enum.reject(&(&1 == ""))
+           |> Enum.reject(&String.starts_with?(&1, "maintenance"))
+    
     case args do
       [date_str] ->
         with {:ok, date} <- Date.from_iso8601(date_str) do
