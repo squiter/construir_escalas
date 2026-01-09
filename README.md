@@ -64,6 +64,8 @@ MIX_ENV=prod mix burrito.build
 
 O binário será gerado em `burrito_out/construir_escala.exe` e pode ser distribuído diretamente para usuários Windows. O arquivo `.exe` é completamente standalone e não requer Erlang ou Elixir instalados.
 
+**Nota:** O binário gerado pelo Burrito será nomeado `construir_escala_windows.exe`, mas será automaticamente renomeado para `construir_escala.exe` no processo de release do GitHub Actions.
+
 ### Nota sobre Build Cross-Platform
 
 O Burrito suporta builds cross-platform. Para construir o binário Windows a partir de macOS/Linux, você pode precisar de configuração adicional ou usar Docker. Consulte a [documentação do Burrito](https://github.com/burrito-elixir/burrito) para mais detalhes sobre builds cross-platform.
