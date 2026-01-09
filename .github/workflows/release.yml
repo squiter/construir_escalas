@@ -26,107 +26,25 @@ jobs:
 
       - name: Install Zig
         run: |
-          # Try using winget first (simplest approach)
-          Write-Host "Attempting to install Zig using winget..."
-          try {
-            winget install --id=ziglang.zig -e --silent --accept-package-agreements --accept-source-agreements
-            # Find zig installation
-            $zigPaths = @(
-              "$env:ProgramFiles\zig",
-              "$env:ProgramFiles(x86)\zig",
-              "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\ziglang.zig_*\zig"
-            )
-            foreach ($path in $zigPaths) {
-              $resolved = Resolve-Path $path -ErrorAction SilentlyContinue
-              if ($resolved -and (Test-Path "$resolved\zig.exe")) {
-                $env:PATH = "$resolved;$env:PATH"
-                echo "$resolved" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-                Write-Host "Zig found at: $resolved"
-                zig version
-                exit 0
-              }
-            }
-          } catch {
-            Write-Host "winget installation failed, trying manual download..."
-          }
-          
-          # Manual download - Burrito 1.4.0 requires exactly Zig 0.14.1
-          # Try GitHub releases first, then ziglang.org
-          $zigVersions = @("0.14.1")
+          # Burrito 1.4.0 requires exactly Zig 0.14.1
+          $zigVersion = "0.14.1"
+          $zigUrl = "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip"
           $zigZip = "zig.zip"
-          $success = $false
           
-          # First try official releases
-          foreach ($zigVersion in $zigVersions) {
-            $zigUrls = @(
-              "https://github.com/ziglang/zig/releases/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
-              "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip"
-            )
-            
-            foreach ($zigUrl in $zigUrls) {
-              Write-Host "Trying Zig version $zigVersion from: $zigUrl"
-              try {
-                $response = Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing -ErrorAction Stop
-                Write-Host "Successfully downloaded Zig $zigVersion"
-                $success = $true
-                break
-              } catch {
-                Write-Host "Failed: $($_.Exception.Message)"
-                if (Test-Path $zigZip) { Remove-Item $zigZip }
-              }
-            }
-            if ($success) { break }
-          }
+          Write-Host "Downloading Zig $zigVersion from $zigUrl"
+          Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing
           
-          # Fallback: try alternative versions if 0.14.1 not found
-          if (-not $success) {
-            Write-Host "Trying fallback versions..."
-            $fallbackVersions = @("0.14.0", "0.13.0")
-          $zigZip = "zig.zip"
-          $success = $false
-          
-          foreach ($zigVersion in $zigVersions) {
-            # Try different URL formats
-            # Try multiple URL formats - ziglang.org and GitHub releases
-            $zigUrls = @(
-              "https://github.com/ziglang/zig/releases/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
-              "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
-              "https://ziglang.org/builds/zig-windows-x86_64-$zigVersion.zip"
-            )
-            
-            foreach ($zigUrl in $zigUrls) {
-              Write-Host "Trying Zig version $zigVersion from: $zigUrl"
-              try {
-                $response = Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing -ErrorAction Stop
-                Write-Host "Successfully downloaded Zig $zigVersion"
-                $success = $true
-                break
-              } catch {
-                Write-Host "Failed: $($_.Exception.Message)"
-                if (Test-Path $zigZip) { Remove-Item $zigZip }
-              }
-            }
-            if ($success) { break }
-          }
-          
-          if (-not $success) {
-            Write-Error "Failed to download any Zig version. Please check https://ziglang.org/download/ for available versions."
-            exit 1
-          }
-          
+          Write-Host "Extracting Zig..."
           Expand-Archive -Path $zigZip -DestinationPath . -Force
-          # Find the zig directory (name may vary)
-          $zigDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "*zig*" -and $_.Name -notlike "*zip*" } | Select-Object -First 1
-          if ($zigDir) {
-            $env:PATH = "$PWD\$($zigDir.Name);$env:PATH"
-            echo "$PWD\$($zigDir.Name)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
-            Write-Host "Zig installed at: $PWD\$($zigDir.Name)"
-            zig version
-          } else {
-            Write-Error "Could not find Zig directory after extraction"
-            Get-ChildItem -Directory | ForEach-Object { Write-Host "Found directory: $($_.Name)" }
-            exit 1
-          }
+          
+          $zigDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "*zig*" } | Select-Object -First 1
+          $zigPath = "$PWD\$($zigDir.Name)"
+          
+          $env:PATH = "$zigPath;$env:PATH"
+          echo "$zigPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          
+          Write-Host "Zig installed at: $zigPath"
+          zig version
 
       - name: Install xz
         run: |
