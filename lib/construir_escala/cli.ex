@@ -4,10 +4,13 @@ defmodule ConstruirEscala.CLI do
   """
 
   def main(args) do
-    # Filter out empty strings and maintenance commands
+    # Filter out empty strings, maintenance commands, and executable name if present
     args = args
            |> Enum.reject(&(&1 == ""))
            |> Enum.reject(&String.starts_with?(&1, "maintenance"))
+           |> Enum.reject(&String.contains?(&1, "construir_escala"))
+    
+    IO.inspect(args, label: "CLI received args")
     
     case args do
       [date_str] ->
