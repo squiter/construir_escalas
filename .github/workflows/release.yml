@@ -10,6 +10,8 @@ jobs:
   build-windows:
     name: Build Windows Binary
     runs-on: windows-latest
+    permissions:
+      contents: write
     env:
       ImageOS: win22
       MIX_ENV: prod
@@ -103,6 +105,20 @@ jobs:
       - name: Build binary with Burrito
         run: mix release
 
+      - name: Find built binary
+        run: |
+          Write-Host "Searching for built binary..."
+          Get-ChildItem -Recurse -Filter "*.exe" | ForEach-Object { Write-Host "Found: $($_.FullName)" }
+          Get-ChildItem -Recurse -Filter "construir_escala*" | ForEach-Object { Write-Host "Found: $($_.FullName)" }
+          if (Test-Path "burrito_out") {
+            Write-Host "burrito_out directory exists"
+            Get-ChildItem -Recurse "burrito_out" | ForEach-Object { Write-Host "Found in burrito_out: $($_.FullName)" }
+          }
+          if (Test-Path "_build/prod/rel/construir_escala") {
+            Write-Host "_build/prod/rel/construir_escala directory exists"
+            Get-ChildItem -Recurse "_build/prod/rel/construir_escala" | ForEach-Object { Write-Host "Found in rel: $($_.FullName)" }
+          }
+
       - name: Get version from tag
         id: get_version
         if: startsWith(github.ref, 'refs/tags/')
@@ -136,7 +152,9 @@ jobs:
             ```
             construir_escala.exe YYYY-MM-DD [semanas]
             ```
-          files: ./burrito_out/construir_escala.exe
+          files: |
+            burrito_out/construir_escala.exe
+            _build/prod/rel/construir_escala/burrito_out/construir_escala.exe
           draft: false
           prerelease: false
         env:
