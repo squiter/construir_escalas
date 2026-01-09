@@ -9,7 +9,6 @@ defmodule ConstruirEscala.MixProject do
       start_permanent: Mix.env() == :prod,
       deps: deps(),
       escript: escript(),
-      burrito: burrito(),
       releases: releases()
     ]
   end
@@ -34,18 +33,15 @@ defmodule ConstruirEscala.MixProject do
     ]
   end
 
-  defp burrito do
-    [
-      targets: [
-        windows: [os: :windows, cpu: :x86_64]
-      ]
-    ]
-  end
-
   defp releases do
     [
       construir_escala: [
-        steps: [:assemble, &Burrito.wrap/1]
+        steps: [:assemble, &Burrito.wrap/1],
+        burrito: [
+          targets: [
+            windows: [os: :windows, cpu: :x86_64]
+          ]
+        ]
       ]
     ]
   end
