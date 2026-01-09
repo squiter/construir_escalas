@@ -152,9 +152,7 @@ jobs:
             ```
             construir_escala.exe YYYY-MM-DD [semanas]
             ```
-          files: |
-            burrito_out/construir_escala.exe
-            _build/prod/rel/construir_escala/burrito_out/construir_escala.exe
+          files: burrito_out/construir_escala_windows.exe
           draft: false
           prerelease: false
         env:
