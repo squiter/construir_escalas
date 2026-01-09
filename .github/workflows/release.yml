@@ -1,0 +1,180 @@
+name: Build and Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+  workflow_dispatch:
+
+jobs:
+  build-windows:
+    name: Build Windows Binary
+    runs-on: windows-latest
+    env:
+      ImageOS: win22
+      MIX_ENV: prod
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Elixir
+        uses: erlef/setup-beam@v1
+        with:
+          elixir-version: '1.15.7'
+          otp-version: '26.2'
+
+      - name: Install Zig
+        run: |
+          # Try using winget first (simplest approach)
+          Write-Host "Attempting to install Zig using winget..."
+          try {
+            winget install --id=ziglang.zig -e --silent --accept-package-agreements --accept-source-agreements
+            # Find zig installation
+            $zigPaths = @(
+              "$env:ProgramFiles\zig",
+              "$env:ProgramFiles(x86)\zig",
+              "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\ziglang.zig_*\zig"
+            )
+            foreach ($path in $zigPaths) {
+              $resolved = Resolve-Path $path -ErrorAction SilentlyContinue
+              if ($resolved -and (Test-Path "$resolved\zig.exe")) {
+                $env:PATH = "$resolved;$env:PATH"
+                echo "$resolved" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+                Write-Host "Zig found at: $resolved"
+                zig version
+                exit 0
+              }
+            }
+          } catch {
+            Write-Host "winget installation failed, trying manual download..."
+          }
+          
+          # Manual download - Burrito 1.5.0 requires exactly Zig 0.15.2
+          # Try 0.15.2 first, then check if it's available in master/nightly builds
+          $zigVersions = @("0.15.2", "0.15.1", "0.15.0", "0.14.1", "0.13.0")
+          $zigZip = "zig.zip"
+          $success = $false
+          
+          foreach ($zigVersion in $zigVersions) {
+            # Try different URL formats
+            # Try multiple URL formats - ziglang.org and GitHub releases
+            $zigUrls = @(
+              "https://github.com/ziglang/zig/releases/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
+              "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
+              "https://ziglang.org/builds/zig-windows-x86_64-$zigVersion.zip"
+            )
+            
+            foreach ($zigUrl in $zigUrls) {
+              Write-Host "Trying Zig version $zigVersion from: $zigUrl"
+              try {
+                $response = Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing -ErrorAction Stop
+                Write-Host "Successfully downloaded Zig $zigVersion"
+                $success = $true
+                break
+              } catch {
+                Write-Host "Failed: $($_.Exception.Message)"
+                if (Test-Path $zigZip) { Remove-Item $zigZip }
+              }
+            }
+            if ($success) { break }
+          }
+          
+          if (-not $success) {
+            Write-Error "Failed to download any Zig version. Please check https://ziglang.org/download/ for available versions."
+            exit 1
+          }
+          
+          Expand-Archive -Path $zigZip -DestinationPath . -Force
+          # Find the zig directory (name may vary)
+          $zigDir = Get-ChildItem -Directory | Where-Object { $_.Name -like "*zig*" -and $_.Name -notlike "*zip*" } | Select-Object -First 1
+          if ($zigDir) {
+            $env:PATH = "$PWD\$($zigDir.Name);$env:PATH"
+            echo "$PWD\$($zigDir.Name)" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            Write-Host "Zig installed at: $PWD\$($zigDir.Name)"
+            zig version
+          } else {
+            Write-Error "Could not find Zig directory after extraction"
+            Get-ChildItem -Directory | ForEach-Object { Write-Host "Found directory: $($_.Name)" }
+            exit 1
+          }
+
+      - name: Install xz
+        run: |
+          # Use winget to install xz (GnuWin32 package)
+          winget install --id=GnuWin32.XZ -e --silent --accept-package-agreements --accept-source-agreements
+          # Add to PATH
+          $xzPath = "$env:ProgramFiles\GnuWin32\bin"
+          if (Test-Path $xzPath) {
+            $env:PATH = "$xzPath;$env:PATH"
+            echo "$xzPath" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+            xz --version
+          } else {
+            Write-Host "xz installation path not found, checking alternative locations..."
+            # Try common installation paths
+            $altPaths = @(
+              "$env:ProgramFiles(x86)\GnuWin32\bin",
+              "$env:LOCALAPPDATA\Microsoft\WinGet\Packages\GnuWin32.XZ_Microsoft.Winget.Source_*\bin"
+            )
+            foreach ($path in $altPaths) {
+              $resolved = Resolve-Path $path -ErrorAction SilentlyContinue
+              if ($resolved) {
+                $env:PATH = "$resolved;$env:PATH"
+                echo "$resolved" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+                break
+              }
+            }
+            xz --version
+          }
+
+      - name: Install dependencies
+        run: mix deps.get
+
+      - name: Compile dependencies
+        run: mix deps.compile
+
+      - name: Compile project
+        run: mix compile
+
+      - name: Build binary with Burrito
+        run: mix release
+
+      - name: Get version from tag
+        id: get_version
+        if: startsWith(github.ref, 'refs/tags/')
+        run: |
+          $tag = "${{ github.ref }}".Replace("refs/tags/", "")
+          $version = $tag.TrimStart('v')
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Get version from mix.exs
+        id: get_version_mix
+        if: "!startsWith(github.ref, 'refs/tags/')"
+        run: |
+          $version = (Get-Content mix.exs | Select-String 'version: "([^"]+)"').Matches.Groups[1].Value
+          $tag = "v$version"
+          echo "version=$version" >> $env:GITHUB_OUTPUT
+          echo "tag=$tag" >> $env:GITHUB_OUTPUT
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ steps.get_version.outputs.tag || steps.get_version_mix.outputs.tag }}
+          name: Release ${{ steps.get_version.outputs.tag || steps.get_version_mix.outputs.tag }}
+          body: |
+            Windows binary for Construir Escala ${{ steps.get_version.outputs.version || steps.get_version_mix.outputs.version }}
+            
+            ## Installation
+            Download `construir_escala.exe` and run it from the command line.
+            
+            ## Usage
+            ```
+            construir_escala.exe YYYY-MM-DD [semanas]
+            ```
+          files: ./burrito_out/construir_escala.exe
+          draft: false
+          prerelease: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
