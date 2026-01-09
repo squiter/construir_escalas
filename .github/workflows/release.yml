@@ -50,9 +50,38 @@ jobs:
             Write-Host "winget installation failed, trying manual download..."
           }
           
-          # Manual download - Burrito 1.5.0 requires exactly Zig 0.15.2
-          # Try 0.15.2 first, then check if it's available in master/nightly builds
-          $zigVersions = @("0.15.2", "0.15.1", "0.15.0", "0.14.1", "0.13.0")
+          # Manual download - Burrito 1.4.0 requires exactly Zig 0.14.1
+          # Try GitHub releases first, then ziglang.org
+          $zigVersions = @("0.14.1")
+          $zigZip = "zig.zip"
+          $success = $false
+          
+          # First try official releases
+          foreach ($zigVersion in $zigVersions) {
+            $zigUrls = @(
+              "https://github.com/ziglang/zig/releases/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip",
+              "https://ziglang.org/download/$zigVersion/zig-windows-x86_64-$zigVersion.zip"
+            )
+            
+            foreach ($zigUrl in $zigUrls) {
+              Write-Host "Trying Zig version $zigVersion from: $zigUrl"
+              try {
+                $response = Invoke-WebRequest -Uri $zigUrl -OutFile $zigZip -UseBasicParsing -ErrorAction Stop
+                Write-Host "Successfully downloaded Zig $zigVersion"
+                $success = $true
+                break
+              } catch {
+                Write-Host "Failed: $($_.Exception.Message)"
+                if (Test-Path $zigZip) { Remove-Item $zigZip }
+              }
+            }
+            if ($success) { break }
+          }
+          
+          # Fallback: try alternative versions if 0.14.1 not found
+          if (-not $success) {
+            Write-Host "Trying fallback versions..."
+            $fallbackVersions = @("0.14.0", "0.13.0")
           $zigZip = "zig.zip"
           $success = $false
           
