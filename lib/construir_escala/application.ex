@@ -7,6 +7,8 @@ defmodule ConstruirEscala.Application do
     # We'll just run the CLI and exit
     # Use Burrito's Args module to get command line arguments when wrapped
     args = Burrito.Util.Args.argv()
+    # Debug: print received arguments
+    IO.inspect(args, label: "Received arguments")
     ConstruirEscala.CLI.main(args)
     System.halt(0)
   end
